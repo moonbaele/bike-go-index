@@ -67,7 +67,7 @@ async function handleApi(req, res, url) {
       getCached(newsCache, newsKey, () => fetchLocalWeatherNews(location), refresh)
     ]);
 
-    const report = buildCyclingReport(weather, location, bike);
+    const report = buildCyclingReport(weather, location, bike, news);
     return sendJson(res, 200, { ...report, news });
   }
 

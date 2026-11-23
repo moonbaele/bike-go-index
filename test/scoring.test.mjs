@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { simulateScenario, simulateSurfaceTimeline, evaluateHour } from '../lib/scoring.mjs';
+import { simulateScenario, simulateSurfaceTimeline, evaluateHour, evaluateNewsAdjustment, buildCyclingReport } from '../lib/scoring.mjs';
 import { classifyNewsItem } from '../lib/news.mjs';
 
 test('rain followed by freezing drop triggers high black ice risk and hard safety cap', () => {
@@ -130,4 +130,85 @@ test('news classifier filters out non-weather articles and tags black ice accura
   assert.equal(iceNews.severity, 'high');
   assert.ok(iceNews.tags.includes('결빙·빙판'));
   assert.ok(iceNews.tags.includes('한파·추위'));
+});
+
+test('news adjustment penalizes 2+ recent 24h ice/advisory articles and ignores older ones', () => {
+  const now = Date.parse('2026-11-23T08:00:00Z');
+  const hAgo = (h) => new Date(now - h * 3600 * 1000).toISOString();
+
+  const single = evaluateNewsAdjustment({
+    articles: [{ title: '도로 살얼음 주의', tags: ['결빙·빙판'], publishedAt: hAgo(3) }]
+  }, now);
+  assert.equal(single.active, false);
+  assert.equal(single.penalty, 0);
+
+  const stale = evaluateNewsAdjustment({
+    articles: [
+      { title: '살얼음', tags: ['결빙·빙판'], publishedAt: hAgo(30) },
+      { title: '한파특보', tags: ['기상특보'], publishedAt: hAgo(40) }
+    ]
+  }, now);
+  assert.equal(stale.active, false);
+  assert.equal(stale.penalty, 0);
+
+  const twoRecent = evaluateNewsAdjustment({
+    articles: [
+      { title: '도로 살얼음 주의', tags: ['결빙·빙판'], publishedAt: hAgo(4) },
+      { title: '경기 한파주의보', tags: ['기상특보'], publishedAt: hAgo(6) }
+    ]
+  }, now);
+  assert.equal(twoRecent.active, true);
+  assert.equal(twoRecent.penalty, 5);
+  assert.ok(twoRecent.alertText.includes('-5점 보정'));
+
+  const fourRecent = evaluateNewsAdjustment({
+    articles: [
+      { title: '살얼음 1', tags: ['결빙·빙판'], publishedAt: hAgo(2) },
+      { title: '살얼음 2', tags: ['결빙·빙판'], publishedAt: hAgo(5) },
+      { title: '특보 1', tags: ['기상특보'], publishedAt: hAgo(7) },
+      { title: '빙판길', tags: ['결빙·빙판'], publishedAt: hAgo(9) }
+    ]
+  }, now);
+  assert.equal(fourRecent.active, true);
+  assert.equal(fourRecent.penalty, 10);
+});
+
+test('buildCyclingReport downgrades borderline go score when recent 24h news alert triggers', () => {
+  const nowIso = new Date().toISOString();
+  const hourly = Array.from({ length: 12 }, (_, i) => ({
+    time: `2026-11-23T${String(10 + i).padStart(2, '0')}:00`,
+    temp: 2,
+    apparentTemp: -2,
+    dewPoint: -5,
+    humidity: 45,
+    precipitation: 0,
+    rain: 0,
+    snowfall: 0,
+    snowDepth: 0,
+    weatherCode: 0,
+    weatherLabel: '맑음',
+    windSpeed: 6,
+    windGusts: 10,
+    soilTemp: 3,
+    radiation: 260,
+    visibility: 10000,
+    pm25: 45,
+    pm10: 65
+  }));
+  const weather = { fetchedAt: nowIso, currentIndex: 2, hourly, daily: [] };
+  const loc = { id: 'dasan', name: '남양주 다산동', fullName: '경기도 남양주시 다산동' };
+
+  const withoutNews = buildCyclingReport(weather, loc, 'hybrid', { articles: [] });
+  const withNews = buildCyclingReport(weather, loc, 'hybrid', {
+    articles: [
+      { title: '경기 북부 살얼음 주의', tags: ['결빙·빙판'], publishedAt: nowIso },
+      { title: '남양주 한파특보 발효', tags: ['기상특보'], publishedAt: nowIso },
+      { title: '도로 결빙 사고 주의', tags: ['결빙·빙판'], publishedAt: nowIso }
+    ]
+  });
+
+  assert.equal(withoutNews.current.verdict.level, 'go');
+  assert.equal(withNews.current.newsAdjustment.active, true);
+  assert.equal(withNews.current.score, withoutNews.current.score - withNews.current.newsAdjustment.penalty);
+  assert.equal(withNews.current.verdict.level, 'caution');
 });

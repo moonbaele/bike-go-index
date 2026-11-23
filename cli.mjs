@@ -28,14 +28,17 @@ const [weather, news] = await Promise.all([
   fetchLocalWeatherNews(location)
 ]);
 
-const report = buildCyclingReport(weather, location, bike);
+const report = buildCyclingReport(weather, location, bike, news);
 const c = report.current;
 
 console.log(`\n[${report.location.fullName}] 자전거 출격 지수 (${c.time.replace('T', ' ')} KST · ${c.profile.label})`);
 console.log(`종합 점수: ${c.score}/100 · 판정: ${c.verdict.label}`);
 console.log(`요약: ${c.verdict.headline}`);
 if (c.activeCap) {
-  console.log(`안전 상한: 원점수 ${c.rawScore} -> ${c.score} (${c.activeCap.reason})`);
+  console.log(`안전 상한: 원점수 ${c.rawScore} -> ${c.weatherScore} (${c.activeCap.reason})`);
+}
+if (c.newsAdjustment?.active) {
+  console.log(c.newsAdjustment.alertText);
 }
 console.log(`블랙아이스 위험: ${c.blackIceRisk}% (${c.surfaceState} · 추정 노면 ${c.roadTemp}°C · 최근 48h 강수 ${c.precip48h}mm)`);
 console.log('');

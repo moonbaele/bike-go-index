@@ -35,6 +35,7 @@ const els = {
   verdictTag: document.getElementById('verdict-tag'),
   verdictHeadline: document.getElementById('verdict-headline'),
   capNote: document.getElementById('cap-note'),
+  newsAlertNote: document.getElementById('news-alert-note'),
   iceBox: document.getElementById('ice-box'),
   icePct: document.getElementById('ice-pct'),
   iceMeterFill: document.getElementById('ice-meter-fill'),
@@ -191,7 +192,7 @@ async function fetchReportData(refresh = false) {
     fetchWeatherBundle(loc.lat, loc.lon),
     loadStaticNews(loc, refresh)
   ]);
-  const report = buildCyclingReport(weather, loc, state.bike);
+  const report = buildCyclingReport(weather, loc, state.bike, news);
   return { ...report, news };
 }
 
@@ -241,9 +242,16 @@ function renderReport(report) {
 
   if (c.activeCap) {
     els.capNote.hidden = false;
-    els.capNote.textContent = `안전 상한 적용: 원점수 ${c.rawScore}점 -> ${c.score}점 (${c.activeCap.reason})`;
+    els.capNote.textContent = `안전 상한 적용: 원점수 ${c.rawScore}점 -> ${c.weatherScore ?? c.score}점 (${c.activeCap.reason})`;
   } else {
     els.capNote.hidden = true;
+  }
+
+  if (c.newsAdjustment?.active) {
+    els.newsAlertNote.hidden = false;
+    els.newsAlertNote.textContent = c.newsAdjustment.alertText;
+  } else {
+    els.newsAlertNote.hidden = true;
   }
 
   els.icePct.textContent = `${c.blackIceRisk}%`;
@@ -422,8 +430,27 @@ function renderHourlyTable(report) {
   `).join('');
 }
 
+function formatClockSeoul(isoString) {
+  if (!isoString) return '';
+  try {
+    return new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    }).format(new Date(isoString));
+  } catch {
+    return '';
+  }
+}
+
 function renderNews(news) {
-  els.newsSummary.textContent = `${news.regionQueryLabel} · ${news.summaryText}`;
+  const updatedClock = formatClockSeoul(news.fetchedAt || state.staticNewsCache?.generatedAt);
+  els.newsSummary.textContent = [
+    news.regionQueryLabel,
+    news.summaryText,
+    updatedClock ? `수집 ${updatedClock}` : ''
+  ].filter(Boolean).join(' · ');
 
   const allTags = ['전체'];
   for (const a of news.articles) {

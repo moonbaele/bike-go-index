@@ -478,6 +478,13 @@
     color: var(--stop-fg);
   }
 
+  .news-alert-note {
+    margin-block-start: 6px;
+    font-size: 0.85rem;
+    color: var(--caution-fg);
+    font-weight: 500;
+  }
+
   .ice-box {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
