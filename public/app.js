@@ -1,6 +1,6 @@
 import { PRESET_LOCATIONS, searchLocations, inferNewsBucket } from './lib/locations.mjs';
 import { fetchWeatherBundle } from './lib/weather.mjs';
-import { buildCyclingReport, simulateScenario } from './lib/scoring.mjs';
+import { buildCyclingReport } from './lib/scoring.mjs';
 
 const STORAGE_KEY = 'bike-go-index:prefs:v1';
 
@@ -50,16 +50,7 @@ const els = {
   newsSummary: document.getElementById('news-summary'),
   newsFilters: document.getElementById('news-filters'),
   newsList: document.getElementById('news-list'),
-  refLinks: document.getElementById('ref-links'),
-  simForm: document.getElementById('sim-form'),
-  simResult: document.getElementById('sim-result')
-};
-
-const SIM_PRESETS = {
-  blackice: { recentRainMm: 5, hoursAgo: 8, minTempAfter: -3, currentTemp: 0.5, windGusts: 5, pm25: 22, isSunnyNow: false },
-  sunnydry: { recentRainMm: 4, hoursAgo: 16, minTempAfter: 3, currentTemp: 9, windGusts: 4, pm25: 18, isSunnyNow: true },
-  gale: { recentRainMm: 0, hoursAgo: 24, minTempAfter: 8, currentTemp: 13, windGusts: 13.5, pm25: 15, isSunnyNow: true },
-  ideal: { recentRainMm: 0, hoursAgo: 30, minTempAfter: 12, currentTemp: 17, windGusts: 3, pm25: 14, isSunnyNow: true }
+  refLinks: document.getElementById('ref-links')
 };
 
 function escapeHtml(text) {
@@ -473,37 +464,6 @@ function renderNews(news) {
     .join('');
 }
 
-function runSimulation() {
-  const fd = new FormData(els.simForm);
-  const payload = {
-    recentRainMm: Number(fd.get('recentRainMm')),
-    hoursAgo: Number(fd.get('hoursAgo')),
-    minTempAfter: Number(fd.get('minTempAfter')),
-    currentTemp: Number(fd.get('currentTemp')),
-    windGusts: Number(fd.get('windGusts')),
-    pm25: Number(fd.get('pm25')),
-    isSunnyNow: fd.get('isSunnyNow') === 'on',
-    bike: state.bike
-  };
-
-  document.getElementById('sim-rain-out').textContent = String(payload.recentRainMm);
-  document.getElementById('sim-hours-out').textContent = String(payload.hoursAgo);
-  document.getElementById('sim-min-temp-out').textContent = String(payload.minTempAfter);
-  document.getElementById('sim-cur-temp-out').textContent = String(payload.currentTemp);
-  document.getElementById('sim-wind-out').textContent = String(payload.windGusts);
-  document.getElementById('sim-pm25-out').textContent = String(payload.pm25);
-
-  const result = simulateScenario(payload);
-  els.simResult.innerHTML = `
-    <div class="score-row">
-      <strong>시뮬레이션 결과: ${result.score}점</strong>
-      <span class="level-chip" data-level="${escapeHtml(result.verdict.level)}">${escapeHtml(result.verdict.label)}</span>
-      <span class="meta-line">블랙아이스 위험 ${result.blackIceRisk}% (${escapeHtml(result.surfaceState)} · 추정 노면 ${result.roadTemp}°C)</span>
-    </div>
-    <p class="meta-line">${escapeHtml(result.factors[0].reason)}${result.activeCap ? ` · ${escapeHtml(result.activeCap.reason)}` : ''}</p>
-  `;
-}
-
 function useCurrentGps() {
   if (!navigator.geolocation) {
     showStatus('이 브라우저에서는 위치 조회를 지원하지 않습니다.', 'error');
@@ -605,7 +565,6 @@ function bindEvents() {
       state.bike = e.target.value;
       savePrefs();
       loadReport(false);
-      runSimulation();
     }
   });
 
@@ -618,31 +577,9 @@ function bindEvents() {
     state.newsFilter = btn.dataset.tag;
     renderNews(state.report.news);
   });
-
-  let simTimer = null;
-  els.simForm.addEventListener('input', () => {
-    clearTimeout(simTimer);
-    simTimer = setTimeout(runSimulation, 40);
-  });
-
-  document.querySelectorAll('[data-sim-preset]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const preset = SIM_PRESETS[btn.dataset.simPreset];
-      if (!preset) return;
-      document.getElementById('sim-rain').value = String(preset.recentRainMm);
-      document.getElementById('sim-hours').value = String(preset.hoursAgo);
-      document.getElementById('sim-min-temp').value = String(preset.minTempAfter);
-      document.getElementById('sim-cur-temp').value = String(preset.currentTemp);
-      document.getElementById('sim-wind').value = String(preset.windGusts);
-      document.getElementById('sim-pm25').value = String(preset.pm25);
-      document.getElementById('sim-sunny').checked = preset.isSunnyNow;
-      runSimulation();
-    });
-  });
 }
 
 loadPrefs();
 initPresets();
 bindEvents();
-runSimulation();
 await loadReport(false);

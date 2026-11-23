@@ -908,51 +908,6 @@
     gap: 12px;
   }
 
-  .sim-presets {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .sim-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px 16px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background-color: var(--surface-subtle);
-  }
-
-  .sim-field {
-    display: grid;
-    gap: 4px;
-    font-size: 0.84rem;
-  }
-
-  .sim-field output {
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .sim-check {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.86rem;
-    cursor: pointer;
-    align-self: center;
-  }
-
-  .sim-result {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 12px 14px;
-    display: grid;
-    gap: 6px;
-    font-size: 0.88rem;
-  }
-
   .formula-list {
     padding-inline-start: 18px;
     display: grid;
@@ -965,30 +920,6 @@
     margin-block-start: 18px;
     font-size: 0.78rem;
     color: var(--muted);
-  }
-
-  @supports not (accent-color: #1d4ed8) {
-    input[type="range"] {
-      -webkit-appearance: none;
-      appearance: none;
-      background: transparent;
-    }
-
-    input[type="range"]::-webkit-slider-runnable-track {
-      block-size: 6px;
-      border-radius: 3px;
-      background-color: var(--border);
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      inline-size: 14px;
-      block-size: 14px;
-      border-radius: 50%;
-      background-color: var(--accent);
-      margin-block-start: -4px;
-    }
   }
 
   @media (max-width: 760px) {

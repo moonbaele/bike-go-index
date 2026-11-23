@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PRESET_LOCATIONS, resolveLocationFromParams, searchLocations } from './lib/locations.mjs';
 import { fetchWeatherBundle } from './lib/weather.mjs';
 import { fetchLocalWeatherNews } from './lib/news.mjs';
-import { buildCyclingReport, simulateScenario, BIKE_PROFILES } from './lib/scoring.mjs';
+import { buildCyclingReport, BIKE_PROFILES } from './lib/scoring.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -47,18 +47,6 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
-async function readJsonBody(req) {
-  const chunks = [];
-  let total = 0;
-  for await (const chunk of req) {
-    total += chunk.length;
-    if (total > 32768) throw new Error('Payload too large');
-    chunks.push(chunk);
-  }
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-}
-
 async function handleApi(req, res, url) {
   if (url.pathname === '/api/locations' && req.method === 'GET') {
     const q = url.searchParams.get('q') || '';
@@ -81,12 +69,6 @@ async function handleApi(req, res, url) {
 
     const report = buildCyclingReport(weather, location, bike);
     return sendJson(res, 200, { ...report, news });
-  }
-
-  if (url.pathname === '/api/simulate' && req.method === 'POST') {
-    const input = await readJsonBody(req);
-    const result = simulateScenario(input);
-    return sendJson(res, 200, { result });
   }
 
   return sendJson(res, 404, { error: 'Not found' });

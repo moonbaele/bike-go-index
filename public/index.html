@@ -163,51 +163,7 @@
       </section>
 
       <section class="panel accordion" aria-labelledby="tools-heading">
-        <h2 id="tools-heading" class="visually-hidden">시뮬레이터 및 산출 기준</h2>
-
-        <details id="sim-details">
-          <summary>블랙아이스·날씨 조건 시뮬레이터 (가상 상황 테스트)</summary>
-          <div class="details-body">
-            <p class="meta-line">최근 비·눈과 기온 급락 조건을 직접 조절해 출격 지수가 어떻게 변하는지 확인할 수 있습니다.</p>
-            <div class="sim-presets">
-              <button type="button" class="btn btn-sm" data-sim-preset="blackice">어젯밤 비 5mm + 새벽 -3°C</button>
-              <button type="button" class="btn btn-sm" data-sim-preset="sunnydry">어제 비 4mm + 오늘 맑음 9°C</button>
-              <button type="button" class="btn btn-sm" data-sim-preset="gale">맑고 건조 + 강풍 돌풍 13m/s</button>
-              <button type="button" class="btn btn-sm" data-sim-preset="ideal">쾌적한 봄·가을 17°C</button>
-            </div>
-            <form id="sim-form" class="sim-grid">
-              <div class="sim-field">
-                <label for="sim-rain">최근 강수량 (<output id="sim-rain-out">5</output> mm)</label>
-                <input id="sim-rain" name="recentRainMm" type="range" min="0" max="20" step="0.5" value="5">
-              </div>
-              <div class="sim-field">
-                <label for="sim-hours">강수 시점 (<output id="sim-hours-out">8</output>시간 전)</label>
-                <input id="sim-hours" name="hoursAgo" type="range" min="0" max="30" step="1" value="8">
-              </div>
-              <div class="sim-field">
-                <label for="sim-min-temp">강수 후 최저기온 (<output id="sim-min-temp-out">-3</output>°C)</label>
-                <input id="sim-min-temp" name="minTempAfter" type="range" min="-12" max="15" step="0.5" value="-3">
-              </div>
-              <div class="sim-field">
-                <label for="sim-cur-temp">현재 기온 (<output id="sim-cur-temp-out">1</output>°C)</label>
-                <input id="sim-cur-temp" name="currentTemp" type="range" min="-12" max="32" step="0.5" value="1">
-              </div>
-              <div class="sim-field">
-                <label for="sim-wind">순간 돌풍 (<output id="sim-wind-out">5</output> m/s)</label>
-                <input id="sim-wind" name="windGusts" type="range" min="0" max="20" step="0.5" value="5">
-              </div>
-              <div class="sim-field">
-                <label for="sim-pm25">초미세먼지 PM2.5 (<output id="sim-pm25-out">22</output> ㎍/㎥)</label>
-                <input id="sim-pm25" name="pm25" type="range" min="5" max="120" step="1" value="22">
-              </div>
-              <label class="sim-check" for="sim-sunny">
-                <input id="sim-sunny" name="isSunnyNow" type="checkbox">
-                <span>현재 맑고 일조량 충분함</span>
-              </label>
-            </form>
-            <div class="sim-result" id="sim-result" aria-live="polite"></div>
-          </div>
-        </details>
+        <h2 id="tools-heading" class="visually-hidden">산출 기준</h2>
 
         <details>
           <summary>지수 계산 방식과 안전 상한선(Hard Cap) 기준</summary>
