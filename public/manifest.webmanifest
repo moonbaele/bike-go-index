@@ -1,0 +1,16 @@
+{
+  "name": "자전거 출격 지수",
+  "short_name": "출격지수",
+  "description": "최근 48시간 강수·노면온도 기반 블랙아이스 판독 및 지역 기상 뉴스",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

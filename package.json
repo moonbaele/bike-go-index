@@ -1,0 +1,12 @@
+{
+  "name": "bike-go-index",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node cli.mjs",
+    "build": "node scripts/build-static.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

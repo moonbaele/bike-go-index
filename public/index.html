@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>자전거 출격 지수 | 노면 결빙·기상·지역 뉴스 판독</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link visually-hidden">본문으로 건너뛰기</a>
+
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar-title">
+        <h1 id="main-content" tabindex="-1">자전거 출격 지수</h1>
+        <p class="meta-line" id="location-meta">경기도 남양주시 다산동 · 실시간 노면·블랙아이스·기상 뉴스 분석</p>
+      </div>
+      <div class="topbar-actions">
+        <button type="button" id="geo-btn" class="btn">현재 위치</button>
+        <button type="button" id="refresh-btn" class="btn">새로고침</button>
+      </div>
+    </header>
+
+    <main class="main-grid">
+      <section class="panel controls-panel" aria-labelledby="controls-heading">
+        <h2 id="controls-heading" class="visually-hidden">지역 및 자전거 설정</h2>
+
+        <div class="controls-row">
+          <div class="field-group location-field">
+            <label for="location-preset">주요 라이딩 지역</label>
+            <select id="location-preset"></select>
+          </div>
+
+          <form id="location-search-form" class="field-group search-field" role="search">
+            <label for="location-search-input">동네 직접 검색</label>
+            <div class="search-input-wrap">
+              <input
+                id="location-search-input"
+                type="search"
+                placeholder="예: 다산동, 별내, 하남, 잠실"
+                autocomplete="off"
+              >
+              <button type="submit" class="btn">검색</button>
+            </div>
+            <div id="search-results" class="search-results" hidden></div>
+          </form>
+
+          <fieldset class="bike-fieldset">
+            <legend>자전거 타입</legend>
+            <div class="segmented" id="bike-selector">
+              <label class="seg-option" for="bike-road">
+                <input type="radio" id="bike-road" name="bike" value="road">
+                <span>로드</span>
+              </label>
+              <label class="seg-option" for="bike-hybrid">
+                <input type="radio" id="bike-hybrid" name="bike" value="hybrid" checked>
+                <span>하이브리드</span>
+              </label>
+              <label class="seg-option" for="bike-gravel">
+                <input type="radio" id="bike-gravel" name="bike" value="gravel">
+                <span>그래블·MTB</span>
+              </label>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
+
+      <section class="panel hero-panel" aria-labelledby="verdict-heading">
+        <h2 id="verdict-heading" class="visually-hidden">현재 출격 판정</h2>
+
+        <div class="hero-top">
+          <div class="score-block">
+            <div class="score-row">
+              <span class="score-number" id="score-number">--</span>
+              <span class="score-max">/ 100</span>
+              <span class="verdict-tag" id="verdict-tag">계산 중</span>
+            </div>
+            <p class="verdict-headline" id="verdict-headline">기상 데이터와 최근 48시간 노면 이력을 불러오는 중입니다.</p>
+            <p class="cap-note" id="cap-note" hidden></p>
+          </div>
+
+          <div class="ice-box" id="ice-box">
+            <div class="ice-box-head">
+              <span class="ice-label">블랙아이스·결빙 위험</span>
+              <strong class="ice-pct" id="ice-pct">--%</strong>
+            </div>
+            <div class="meter-track" aria-hidden="true">
+              <div class="meter-fill" id="ice-meter-fill"></div>
+            </div>
+            <p class="ice-detail" id="ice-detail">최근 48시간 강수 및 노면 온도 추적 중</p>
+          </div>
+        </div>
+
+        <dl class="quick-stats" id="quick-stats"></dl>
+
+        <div class="advice-bar">
+          <p class="route-note" id="route-note"></p>
+          <ul class="checklist" id="checklist"></ul>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="factors-heading">
+        <div class="section-head">
+          <h2 id="factors-heading">세부 항목별 분석</h2>
+          <p class="meta-line" id="profile-meta"></p>
+        </div>
+        <ul class="factor-list" id="factor-list" role="list"></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="timeline-heading">
+        <div class="section-head">
+          <h2 id="timeline-heading">최근 36시간 ~ 향후 24시간 강수·노면온도·결빙 추이</h2>
+          <p class="meta-line">비·눈 이후 기온과 추정 노면온도가 0°C 이하로 내려갈 때 결빙 위험이 급상승합니다.</p>
+        </div>
+        <figure class="chart-figure">
+          <div id="timeline-chart" class="chart-host"></div>
+          <figcaption class="chart-legend">
+            <span><i class="swatch swatch-air" aria-hidden="true"></i>기온 (°C)</span>
+            <span><i class="swatch swatch-road" aria-hidden="true"></i>추정 노면온도 (°C)</span>
+            <span><i class="swatch swatch-rain" aria-hidden="true"></i>시간당 강수 (mm)</span>
+            <span><i class="swatch swatch-ice" aria-hidden="true"></i>결빙 위험 구간</span>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="panel" aria-labelledby="hourly-heading">
+        <div class="section-head">
+          <h2 id="hourly-heading">시간대별 출격 예보 (향후 24시간)</h2>
+          <p class="meta-line" id="window-summary"></p>
+        </div>
+        <div class="table-scroll">
+          <table class="hourly-table">
+            <caption class="visually-hidden">향후 24시간 시간대별 자전거 출격 지수와 노면 결빙 위험</caption>
+            <thead>
+              <tr>
+                <th scope="col">시각</th>
+                <th scope="col">지수</th>
+                <th scope="col">판정</th>
+                <th scope="col">기온 / 노면</th>
+                <th scope="col">강수</th>
+                <th scope="col">돌풍</th>
+                <th scope="col">결빙 위험</th>
+              </tr>
+            </thead>
+            <tbody id="hourly-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="news-heading">
+        <div class="section-head">
+          <h2 id="news-heading">지역 날씨·도로안전 뉴스</h2>
+          <p class="meta-line" id="news-summary"></p>
+        </div>
+        <div class="news-filters" id="news-filters" role="group" aria-label="뉴스 키워드 필터"></div>
+        <ul class="news-list" id="news-list" role="list"></ul>
+        <div class="ref-links" id="ref-links"></div>
+      </section>
+
+      <section class="panel accordion" aria-labelledby="tools-heading">
+        <h2 id="tools-heading" class="visually-hidden">시뮬레이터 및 산출 기준</h2>
+
+        <details id="sim-details">
+          <summary>블랙아이스·날씨 조건 시뮬레이터 (가상 상황 테스트)</summary>
+          <div class="details-body">
+            <p class="meta-line">최근 비·눈과 기온 급락 조건을 직접 조절해 출격 지수가 어떻게 변하는지 확인할 수 있습니다.</p>
+            <div class="sim-presets">
+              <button type="button" class="btn btn-sm" data-sim-preset="blackice">어젯밤 비 5mm + 새벽 -3°C</button>
+              <button type="button" class="btn btn-sm" data-sim-preset="sunnydry">어제 비 4mm + 오늘 맑음 9°C</button>
+              <button type="button" class="btn btn-sm" data-sim-preset="gale">맑고 건조 + 강풍 돌풍 13m/s</button>
+              <button type="button" class="btn btn-sm" data-sim-preset="ideal">쾌적한 봄·가을 17°C</button>
+            </div>
+            <form id="sim-form" class="sim-grid">
+              <div class="sim-field">
+                <label for="sim-rain">최근 강수량 (<output id="sim-rain-out">5</output> mm)</label>
+                <input id="sim-rain" name="recentRainMm" type="range" min="0" max="20" step="0.5" value="5">
+              </div>
+              <div class="sim-field">
+                <label for="sim-hours">강수 시점 (<output id="sim-hours-out">8</output>시간 전)</label>
+                <input id="sim-hours" name="hoursAgo" type="range" min="0" max="30" step="1" value="8">
+              </div>
+              <div class="sim-field">
+                <label for="sim-min-temp">강수 후 최저기온 (<output id="sim-min-temp-out">-3</output>°C)</label>
+                <input id="sim-min-temp" name="minTempAfter" type="range" min="-12" max="15" step="0.5" value="-3">
+              </div>
+              <div class="sim-field">
+                <label for="sim-cur-temp">현재 기온 (<output id="sim-cur-temp-out">1</output>°C)</label>
+                <input id="sim-cur-temp" name="currentTemp" type="range" min="-12" max="32" step="0.5" value="1">
+              </div>
+              <div class="sim-field">
+                <label for="sim-wind">순간 돌풍 (<output id="sim-wind-out">5</output> m/s)</label>
+                <input id="sim-wind" name="windGusts" type="range" min="0" max="20" step="0.5" value="5">
+              </div>
+              <div class="sim-field">
+                <label for="sim-pm25">초미세먼지 PM2.5 (<output id="sim-pm25-out">22</output> ㎍/㎥)</label>
+                <input id="sim-pm25" name="pm25" type="range" min="5" max="120" step="1" value="22">
+              </div>
+              <label class="sim-check" for="sim-sunny">
+                <input id="sim-sunny" name="isSunnyNow" type="checkbox">
+                <span>현재 맑고 일조량 충분함</span>
+              </label>
+            </form>
+            <div class="sim-result" id="sim-result" aria-live="polite"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>지수 계산 방식과 안전 상한선(Hard Cap) 기준</summary>
+          <div class="details-body">
+            <ul class="formula-list">
+              <li>가중치 구성: 노면·블랙아이스 30% · 강수·시정 25% · 바람·돌풍 15% · 기온·체감 15% · 대기질(PM2.5/PM10) 15%</li>
+              <li>블랙아이스 물리 추적: 최근 48시간 시간별 강수·적설량을 누적한 뒤 일사량·습도·풍속으로 증발량을 차감하고, 지표면 온도(0cm)와 복사냉각을 반영한 추정 노면온도가 0.5°C 이하로 내려가면 잔여 수분을 결빙 상태로 전환합니다.</li>
+              <li>안전 상한선: 다른 지표가 만점이어도 블랙아이스 위험 70% 이상(최대 25점), 현재 강수 2mm/h 이상(최대 30점), 돌풍 14m/s 이상(최대 35점), 미세먼지 매우 나쁨(최대 45점)이면 총점을 강제 제한합니다.</li>
+            </ul>
+          </div>
+        </details>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>기상·지표면 온도·대기질: Open-Meteo (API 키 불필요) · 지역 기상 뉴스: Google News Korea RSS · 기준 시간대: Asia/Seoul</p>
+    </footer>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
