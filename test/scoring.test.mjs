@@ -120,32 +120,52 @@ test('drizzle with rain=0 still wets road surface and affects surface score', ()
   assert.notEqual(timeline[5].surfaceState, '건조');
 });
 
-test('news classifier filters out non-weather articles and tags black ice accurately', () => {
-  const noise = classifyNewsItem('정부, AI 데이터센터 전력 규제 완화…비수도권 평가 면제', ['남양주', '다산']);
+test('news classifier filters out non-weather and other-region articles accurately', () => {
+  const noise = classifyNewsItem('정부, AI 데이터센터 전력 규제 완화…비수도권 평가 면제', ['남양주', '다산'], '경기 OR 수도권');
   assert.equal(noise, null);
 
-  const iceNews = classifyNewsItem('남양주 아침 영하권 한파…도로 살얼음·빙판길 주의', ['남양주', '다산']);
+  const otherRegion = classifyNewsItem('강원 최대 8cm 눈·서울 30mm 비…출근길 어는 비 빙판 주의', ['남양주', '다산동', '구리', '경기북부'], '경기 OR 수도권');
+  assert.equal(otherRegion, null);
+
+  const westCoast = classifyNewsItem('내일도 영하 4도…서해안 빙판길 주의', ['남양주', '다산동', '구리', '경기북부'], '경기 OR 수도권');
+  assert.equal(westCoast, null);
+
+  const national = classifyNewsItem('월요일부터 춥고 미끄럽다…전국 비 또는 눈, 살얼음 주의', ['남양주', '다산동', '구리', '경기북부'], '경기 OR 수도권');
+  assert.ok(national !== null);
+  assert.equal(national.regionScope, 'national');
+
+  const iceNews = classifyNewsItem('남양주 아침 영하권 한파…도로 살얼음·빙판길 주의', ['남양주', '다산'], '경기 OR 수도권');
   assert.ok(iceNews !== null);
   assert.equal(iceNews.isLocalMatch, true);
+  assert.equal(iceNews.regionScope, 'local');
   assert.equal(iceNews.severity, 'high');
   assert.ok(iceNews.tags.includes('결빙·빙판'));
   assert.ok(iceNews.tags.includes('한파·추위'));
 });
 
-test('news adjustment penalizes 2+ recent 24h ice/advisory articles and ignores older ones', () => {
+test('news adjustment penalizes 2+ recent 24h local ice/advisory articles and ignores stale or national-only ones', () => {
   const now = Date.parse('2026-11-23T08:00:00Z');
   const hAgo = (h) => new Date(now - h * 3600 * 1000).toISOString();
 
   const single = evaluateNewsAdjustment({
-    articles: [{ title: '도로 살얼음 주의', tags: ['결빙·빙판'], publishedAt: hAgo(3) }]
+    articles: [{ title: '도로 살얼음 주의', tags: ['결빙·빙판'], regionScope: 'local', publishedAt: hAgo(3) }]
   }, now);
   assert.equal(single.active, false);
   assert.equal(single.penalty, 0);
 
+  const nationalOnly = evaluateNewsAdjustment({
+    articles: [
+      { title: '전국 비 또는 눈 살얼음 주의', tags: ['결빙·빙판'], regionScope: 'national', publishedAt: hAgo(2) },
+      { title: '전국 한파특보 발효', tags: ['기상특보'], regionScope: 'national', publishedAt: hAgo(3) }
+    ]
+  }, now);
+  assert.equal(nationalOnly.active, false);
+  assert.equal(nationalOnly.penalty, 0);
+
   const stale = evaluateNewsAdjustment({
     articles: [
-      { title: '살얼음', tags: ['결빙·빙판'], publishedAt: hAgo(30) },
-      { title: '한파특보', tags: ['기상특보'], publishedAt: hAgo(40) }
+      { title: '살얼음', tags: ['결빙·빙판'], regionScope: 'local', publishedAt: hAgo(30) },
+      { title: '한파특보', tags: ['기상특보'], regionScope: 'local', publishedAt: hAgo(40) }
     ]
   }, now);
   assert.equal(stale.active, false);
@@ -153,8 +173,8 @@ test('news adjustment penalizes 2+ recent 24h ice/advisory articles and ignores 
 
   const twoRecent = evaluateNewsAdjustment({
     articles: [
-      { title: '도로 살얼음 주의', tags: ['결빙·빙판'], publishedAt: hAgo(4) },
-      { title: '경기 한파주의보', tags: ['기상특보'], publishedAt: hAgo(6) }
+      { title: '도로 살얼음 주의', tags: ['결빙·빙판'], regionScope: 'local', publishedAt: hAgo(4) },
+      { title: '경기 한파주의보', tags: ['기상특보'], regionScope: 'local', publishedAt: hAgo(6) }
     ]
   }, now);
   assert.equal(twoRecent.active, true);
@@ -163,10 +183,10 @@ test('news adjustment penalizes 2+ recent 24h ice/advisory articles and ignores 
 
   const fourRecent = evaluateNewsAdjustment({
     articles: [
-      { title: '살얼음 1', tags: ['결빙·빙판'], publishedAt: hAgo(2) },
-      { title: '살얼음 2', tags: ['결빙·빙판'], publishedAt: hAgo(5) },
-      { title: '특보 1', tags: ['기상특보'], publishedAt: hAgo(7) },
-      { title: '빙판길', tags: ['결빙·빙판'], publishedAt: hAgo(9) }
+      { title: '살얼음 1', tags: ['결빙·빙판'], regionScope: 'local', publishedAt: hAgo(2) },
+      { title: '살얼음 2', tags: ['결빙·빙판'], regionScope: 'local', publishedAt: hAgo(5) },
+      { title: '특보 1', tags: ['기상특보'], regionScope: 'local', publishedAt: hAgo(7) },
+      { title: '빙판길', tags: ['결빙·빙판'], regionScope: 'local', publishedAt: hAgo(9) }
     ]
   }, now);
   assert.equal(fourRecent.active, true);
