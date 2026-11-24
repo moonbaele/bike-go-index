@@ -68,7 +68,7 @@ async function handleApi(req, res, url) {
     ]);
 
     const report = buildCyclingReport(weather, location, bike, news);
-    return sendJson(res, 200, { ...report, news });
+    return sendJson(res, 200, { ...report, weather, news });
   }
 
   return sendJson(res, 404, { error: 'Not found' });

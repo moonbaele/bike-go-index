@@ -124,6 +124,9 @@ test('news classifier filters out non-weather and other-region articles accurate
   const noise = classifyNewsItem('정부, AI 데이터센터 전력 규제 완화…비수도권 평가 면제', ['남양주', '다산'], '경기 OR 수도권');
   assert.equal(noise, null);
 
+  const econNoise = classifyNewsItem('12월 기업 경기전망 3개월 만에 반등…제조업은 여전히 한파', ['남양주', '다산'], '경기 OR 수도권');
+  assert.equal(econNoise, null);
+
   const otherRegion = classifyNewsItem('강원 최대 8cm 눈·서울 30mm 비…출근길 어는 비 빙판 주의', ['남양주', '다산동', '구리', '경기북부'], '경기 OR 수도권');
   assert.equal(otherRegion, null);
 

@@ -2,21 +2,18 @@ import { PRESET_LOCATIONS, searchLocations, inferNewsBucket } from './lib/locati
 import { fetchWeatherBundle } from './lib/weather.mjs';
 import { buildCyclingReport } from './lib/scoring.mjs';
 
-const STORAGE_KEY = 'bike-go-index:prefs:v1';
-
-const IS_LOCAL_API = (
-  window.location.hostname === 'localhost' ||
-  window.location.hostname === '127.0.0.1' ||
-  window.location.hostname.endsWith('.local') ||
-  /^192\.168\./.test(window.location.hostname) ||
-  /^10\./.test(window.location.hostname)
-);
+const PREFS_KEY = 'bike-go-index:prefs:v1';
+const SNAPSHOTS_KEY = 'bike-go-index:snapshots:v1';
+const HAS_LIVE_API = !window.location.hostname.endsWith('.github.io');
 
 const state = {
   presets: PRESET_LOCATIONS,
   currentLocation: PRESET_LOCATIONS[0],
   bike: 'hybrid',
   report: null,
+  rawWeather: null,
+  rawNews: null,
+  updatedAt: null,
   newsFilter: '전체',
   staticNewsCache: null
 };
@@ -77,9 +74,28 @@ function formatHourLabel(isoLocal) {
   return `${month}/${day} ${hour}:00`;
 }
 
+function formatDateTimeSeoul(isoString) {
+  if (!isoString) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(new Date(isoString));
+    const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+    return `${map.month}/${map.day} ${map.hour}:${map.minute}`;
+  } catch {
+    return '';
+  }
+}
+
 function formatRelativeTime(isoString) {
   if (!isoString) return '';
   const diffMin = Math.max(0, Math.round((Date.now() - new Date(isoString).getTime()) / 60000));
+  if (diffMin < 1) return '방금 전';
   if (diffMin < 60) return `${diffMin}분 전`;
   const diffHours = Math.round(diffMin / 60);
   if (diffHours < 24) return `${diffHours}시간 전`;
@@ -97,9 +113,14 @@ function showStatus(message, tone = 'info') {
   els.statusBanner.textContent = message;
 }
 
+function locationKey(loc) {
+  if (!loc) return 'dasan';
+  return loc.id || `custom:${Number(loc.lat).toFixed(4)},${Number(loc.lon).toFixed(4)}`;
+}
+
 function savePrefs() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    localStorage.setItem(PREFS_KEY, JSON.stringify({
       bike: state.bike,
       location: state.currentLocation
     }));
@@ -109,7 +130,7 @@ function savePrefs() {
 
 function loadPrefs() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return;
     const saved = JSON.parse(raw);
     if (saved.bike && ['road', 'hybrid', 'gravel'].includes(saved.bike)) {
@@ -124,9 +145,32 @@ function loadPrefs() {
   }
 }
 
-function buildReportQuery(refresh = false) {
-  const params = new URLSearchParams({ bike: state.bike });
-  if (refresh) params.set('refresh', '1');
+function readSnapshots() {
+  try {
+    return JSON.parse(localStorage.getItem(SNAPSHOTS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveSnapshot(location, weather, news, updatedAt) {
+  try {
+    const map = readSnapshots();
+    const key = locationKey(location);
+    map[key] = { location, weather, news, updatedAt };
+    const entries = Object.entries(map).sort((a, b) => (b[1].updatedAt || '').localeCompare(a[1].updatedAt || ''));
+    localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(Object.fromEntries(entries.slice(0, 6))));
+  } catch {
+  }
+}
+
+function loadSnapshotFor(location) {
+  const map = readSnapshots();
+  return map[locationKey(location)] || null;
+}
+
+function buildReportQuery() {
+  const params = new URLSearchParams({ bike: state.bike, refresh: '1' });
   if (state.currentLocation) {
     if (state.currentLocation.id && !state.currentLocation.id.startsWith('custom:')) {
       params.set('location', state.currentLocation.id);
@@ -143,31 +187,21 @@ function buildReportQuery(refresh = false) {
   return params.toString();
 }
 
-async function loadStaticNews(location, refresh = false) {
-  if (refresh || !state.staticNewsCache) {
-    try {
-      const res = await fetch(`./data/news.json?t=${Date.now()}`);
-      if (res.ok) {
-        state.staticNewsCache = await res.json();
-      }
-    } catch {
+async function loadStaticNews(location) {
+  try {
+    const res = await fetch(`./data/news.json?t=${Date.now()}`);
+    if (res.ok) {
+      state.staticNewsCache = await res.json();
     }
+  } catch {
   }
 
   const bucketKey = location.newsBucket || inferNewsBucket(location.lat, location.lon, location.fullName || location.name || '');
   const bucket = state.staticNewsCache?.buckets?.[bucketKey] || state.staticNewsCache?.buckets?.namyangju;
-
-  if (bucket) {
-    return {
-      ...bucket,
-      articles: (bucket.articles || []).map((a) => ({
-        ...a,
-        relativeTime: a.publishedAt ? formatRelativeTime(a.publishedAt) : a.relativeTime
-      }))
-    };
-  }
+  if (bucket) return bucket;
 
   return {
+    fetchedAt: new Date().toISOString(),
     regionQueryLabel: location.name,
     summaryText: '실시간 기상 특보 링크에서 지역 특보를 확인하세요',
     articles: [],
@@ -178,22 +212,114 @@ async function loadStaticNews(location, refresh = false) {
   };
 }
 
-async function fetchReportData(refresh = false) {
-  if (IS_LOCAL_API) {
-    try {
-      const res = await fetch(`./api/report?${buildReportQuery(refresh)}`);
-      if (res.ok) return await res.json();
-    } catch {
-    }
+function normalizeNewsTimestamps(news) {
+  return {
+    ...news,
+    articles: (news.articles || []).map((a) => ({
+      ...a,
+      relativeTime: a.publishedAt ? formatRelativeTime(a.publishedAt) : a.relativeTime
+    }))
+  };
+}
+
+function renderEmptyState() {
+  const loc = state.currentLocation || PRESET_LOCATIONS[0];
+  state.report = null;
+  state.rawWeather = null;
+  state.rawNews = null;
+  state.updatedAt = null;
+
+  document.title = `${loc.name} | 자전거 출격 지수`;
+  els.locationMeta.textContent = `${loc.fullName} · 저장된 데이터 없음`;
+  els.scoreNumber.textContent = '--';
+  els.verdictTag.textContent = '대기';
+  delete els.verdictTag.dataset.level;
+  els.verdictHeadline.textContent = `상단 '업데이트' 버튼을 눌러 ${loc.name} 최신 기상·노면·지역 뉴스를 불러오세요.`;
+  els.capNote.hidden = true;
+  els.newsAlertNote.hidden = true;
+  els.icePct.textContent = '--%';
+  els.iceMeterFill.style.inlineSize = '0%';
+  els.iceBox.dataset.risk = 'low';
+  els.iceDetail.textContent = '업데이트 버튼을 누르면 최근 48시간 강수·노면 온도를 분석합니다.';
+  els.quickStats.innerHTML = '';
+  els.routeNote.textContent = loc.routeNote || '';
+  els.checklist.innerHTML = '';
+  els.profileMeta.textContent = '';
+  els.factorList.innerHTML = '';
+  els.timelineChart.textContent = '업데이트 후 차트가 표시됩니다.';
+  els.windowSummary.textContent = '';
+  els.hourlyTbody.innerHTML = '';
+  els.newsSummary.textContent = '업데이트 버튼을 눌러 최신 지역 기상 뉴스를 불러오세요.';
+  els.newsFilters.innerHTML = '';
+  els.newsList.innerHTML = '';
+  els.refLinks.innerHTML = '';
+  showStatus('페이지 접속·새로고침 시에는 자동 조회하지 않습니다. 필요할 때 상단 "업데이트" 버튼을 눌러 최신화하세요.');
+}
+
+function renderFromRaw(location, weather, news, updatedAt, { fromCache = false } = {}) {
+  const normalizedNews = normalizeNewsTimestamps(news);
+  const report = buildCyclingReport(weather, location, state.bike, normalizedNews);
+  state.report = { ...report, news: normalizedNews };
+  state.rawWeather = weather;
+  state.rawNews = news;
+  state.updatedAt = updatedAt;
+  state.newsFilter = '전체';
+
+  if (fromCache) {
+    const label = formatDateTimeSeoul(updatedAt);
+    const rel = formatRelativeTime(updatedAt);
+    showStatus(`저장된 최신 결과 표시 중 (${label} · ${rel}). 새 기상·뉴스를 받으려면 상단 "업데이트"를 누르세요.`);
+  } else {
+    showStatus('');
   }
 
-  const loc = state.currentLocation || PRESET_LOCATIONS[0];
-  const [weather, news] = await Promise.all([
-    fetchWeatherBundle(loc.lat, loc.lon),
-    loadStaticNews(loc, refresh)
-  ]);
-  const report = buildCyclingReport(weather, loc, state.bike, news);
-  return { ...report, news };
+  renderReport(state.report);
+}
+
+async function updateLiveReport() {
+  els.refreshBtn.disabled = true;
+  els.refreshBtn.textContent = '업데이트 중...';
+  showStatus('기상·노면 데이터와 최신 지역 뉴스를 불러오는 중입니다.');
+  try {
+    const loc = state.currentLocation || PRESET_LOCATIONS[0];
+    let weather = null;
+    let news = null;
+    let resolvedLoc = loc;
+
+    if (HAS_LIVE_API) {
+      const res = await fetch(`./api/report?${buildReportQuery()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      weather = data.weather;
+      news = data.news;
+      resolvedLoc = data.location || loc;
+    } else {
+      [weather, news] = await Promise.all([
+        fetchWeatherBundle(loc.lat, loc.lon),
+        loadStaticNews(loc)
+      ]);
+    }
+
+    const updatedAt = new Date().toISOString();
+    state.currentLocation = resolvedLoc;
+    savePrefs();
+    saveSnapshot(resolvedLoc, weather, news, updatedAt);
+    renderFromRaw(resolvedLoc, weather, news, updatedAt, { fromCache: false });
+  } catch (err) {
+    showStatus(`업데이트에 실패했습니다: ${err.message}`, 'error');
+  } finally {
+    els.refreshBtn.disabled = false;
+    els.refreshBtn.textContent = '업데이트';
+  }
+}
+
+function restoreOrPromptCurrentLocation() {
+  const snap = loadSnapshotFor(state.currentLocation);
+  if (snap?.weather && snap?.news) {
+    renderFromRaw(snap.location || state.currentLocation, snap.weather, snap.news, snap.updatedAt, { fromCache: true });
+  } else {
+    renderEmptyState();
+  }
 }
 
 function initPresets() {
@@ -207,29 +333,13 @@ function initPresets() {
   }
 }
 
-async function loadReport(refresh = false) {
-  els.refreshBtn.disabled = true;
-  try {
-    const data = await fetchReportData(refresh);
-    state.report = data;
-    state.currentLocation = data.location;
-    state.newsFilter = '전체';
-    savePrefs();
-    showStatus('');
-    renderReport(data);
-  } catch (err) {
-    showStatus(`데이터를 불러오지 못했습니다: ${err.message}`, 'error');
-  } finally {
-    els.refreshBtn.disabled = false;
-  }
-}
-
 function renderReport(report) {
   const c = report.current;
   const sunStr = report.todaySun?.sunset ? `일몰 ${report.todaySun.sunset.slice(11, 16)}` : '';
+  const updatedStr = state.updatedAt ? `업데이트 ${formatDateTimeSeoul(state.updatedAt)}` : '';
   els.locationMeta.textContent = [
     report.location.fullName,
-    `기준 ${formatHourLabel(c.time)}`,
+    updatedStr,
     sunStr
   ].filter(Boolean).join(' · ');
 
@@ -430,22 +540,8 @@ function renderHourlyTable(report) {
   `).join('');
 }
 
-function formatClockSeoul(isoString) {
-  if (!isoString) return '';
-  try {
-    return new Intl.DateTimeFormat('ko-KR', {
-      timeZone: 'Asia/Seoul',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23'
-    }).format(new Date(isoString));
-  } catch {
-    return '';
-  }
-}
-
 function renderNews(news) {
-  const updatedClock = formatClockSeoul(news.fetchedAt || state.staticNewsCache?.generatedAt);
+  const updatedClock = formatDateTimeSeoul(news.fetchedAt || state.updatedAt);
   els.newsSummary.textContent = [
     news.regionQueryLabel,
     news.summaryText,
@@ -512,8 +608,9 @@ function useCurrentGps() {
         broadRegion: '경기 OR 수도권',
         routeNote: '현재 위치 기준 기상·지표면 온도입니다. 하천변·교량·그늘 구간은 1~2°C 더 낮을 수 있습니다.'
       };
+      savePrefs();
       els.geoBtn.disabled = false;
-      loadReport(true);
+      updateLiveReport();
     },
     (err) => {
       els.geoBtn.disabled = false;
@@ -528,8 +625,9 @@ function bindEvents() {
     const picked = state.presets.find((p) => p.id === els.presetSelect.value);
     if (picked) {
       state.currentLocation = picked;
+      savePrefs();
       els.searchResults.hidden = true;
-      loadReport(false);
+      restoreOrPromptCurrentLocation();
     }
   });
 
@@ -542,7 +640,7 @@ function bindEvents() {
     }
 
     let list = [];
-    if (IS_LOCAL_API) {
+    if (HAS_LIVE_API) {
       try {
         const res = await fetch(`./api/locations?q=${encodeURIComponent(q)}`);
         if (res.ok) {
@@ -574,9 +672,10 @@ function bindEvents() {
       const chosen = list[Number(btn.dataset.idx)];
       if (chosen) {
         state.currentLocation = chosen;
+        savePrefs();
         els.searchResults.hidden = true;
         els.searchInput.value = chosen.name;
-        loadReport(false);
+        restoreOrPromptCurrentLocation();
       }
     };
   });
@@ -591,12 +690,14 @@ function bindEvents() {
     if (e.target.name === 'bike') {
       state.bike = e.target.value;
       savePrefs();
-      loadReport(false);
+      if (state.rawWeather && state.rawNews) {
+        renderFromRaw(state.currentLocation, state.rawWeather, state.rawNews, state.updatedAt, { fromCache: true });
+      }
     }
   });
 
   els.geoBtn.addEventListener('click', useCurrentGps);
-  els.refreshBtn.addEventListener('click', () => loadReport(true));
+  els.refreshBtn.addEventListener('click', () => updateLiveReport());
 
   els.newsFilters.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-tag]');
@@ -609,4 +710,4 @@ function bindEvents() {
 loadPrefs();
 initPresets();
 bindEvents();
-await loadReport(false);
+restoreOrPromptCurrentLocation();

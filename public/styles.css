@@ -258,6 +258,18 @@
     cursor: not-allowed;
   }
 
+  .btn-primary {
+    background-color: var(--text);
+    color: var(--surface);
+    border-color: var(--text);
+    font-weight: 600;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    opacity: 0.88;
+    border-color: var(--text);
+  }
+
   .btn-sm {
     min-block-size: 30px;
     padding: 4px 10px;
