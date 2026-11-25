@@ -120,6 +120,43 @@ test('drizzle with rain=0 still wets road surface and affects surface score', ()
   assert.notEqual(timeline[5].surfaceState, '건조');
 });
 
+test('dried road 46h after rain does not spike to black ice on sunset cooling', () => {
+  const hourly = Array.from({ length: 52 }, (_, i) => {
+    const isRain = i === 1 || i === 2;
+    const isColdFirstNight = i >= 6 && i <= 14;
+    const isWarmDryDay = i >= 18 && i <= 46;
+    const temp = isColdFirstNight ? -2 : isWarmDryDay ? 6 : 4;
+    const soilTemp = i >= 47 ? -2.2 : temp;
+    return {
+      time: `2026-11-23T${String(i % 24).padStart(2, '0')}:00`,
+      temp,
+      apparentTemp: temp - 1,
+      dewPoint: -2,
+      humidity: isWarmDryDay ? 50 : 72,
+      precipitation: isRain ? 4 : 0,
+      rain: isRain ? 4 : 0,
+      snowfall: 0,
+      snowDepth: 0,
+      weatherCode: isRain ? 61 : 0,
+      weatherLabel: isRain ? '약한 비' : '맑음',
+      windSpeed: 3,
+      windGusts: 4.5,
+      soilTemp,
+      radiation: isWarmDryDay ? 350 : 0,
+      visibility: 10000,
+      pm25: 18,
+      pm10: 25
+    };
+  });
+
+  const timeline = simulateSurfaceTimeline(hourly);
+  const sunsetHour = evaluateHour(timeline, 47, 'hybrid');
+  const nextHour = evaluateHour(timeline, 48, 'hybrid');
+  assert.ok(sunsetHour.blackIceRisk < 15, `Dried road should not spike to black ice, got ${sunsetHour.blackIceRisk}%`);
+  assert.ok(nextHour.blackIceRisk < 15, `Next hour should also stay dry, got ${nextHour.blackIceRisk}%`);
+  assert.notEqual(sunsetHour.verdict.level, 'stop');
+});
+
 test('news classifier filters out non-weather and other-region articles accurately', () => {
   const noise = classifyNewsItem('정부, AI 데이터센터 전력 규제 완화…비수도권 평가 면제', ['남양주', '다산'], '경기 OR 수도권');
   assert.equal(noise, null);
